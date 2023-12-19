@@ -18,6 +18,7 @@ use bitcoin::{
     blockdata::script::Script, blockdata::transaction::TxIn, network::constants::Network,
     util::address::Address, PublicKey,
 };
+use bitcoin::hashes::sha256d::Hash;
 use secp256k1::{self, All, Secp256k1, SecretKey};
 
 use crate::{
@@ -70,7 +71,7 @@ impl InputSigner {
         &mut self,
         txin: TxInRef<'a>,
         value: V,
-    ) -> Sha256dHash {
+    ) -> Hash {
         sign::signature_hash(txin, &self.script.0, value)
     }
 

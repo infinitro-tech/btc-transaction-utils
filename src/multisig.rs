@@ -84,8 +84,8 @@ impl AsRef<Script> for RedeemScript {
 
 impl ::serde::Serialize for RedeemScript {
     fn serialize<S>(&self, ser: S) -> ::std::result::Result<S::Ok, S::Error>
-    where
-        S: ::serde::Serializer,
+        where
+            S: ::serde::Serializer,
     {
         ::serde_str::serialize(self, ser)
     }
@@ -93,8 +93,8 @@ impl ::serde::Serialize for RedeemScript {
 
 impl<'de> ::serde::Deserialize<'de> for RedeemScript {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: ::serde::Deserializer<'de>,
+        where
+            D: ::serde::Deserializer<'de>,
     {
         ::serde_str::deserialize(deserializer)
     }
@@ -129,18 +129,26 @@ impl RedeemScriptContent {
                 }
                 _ => None,
             }
+        }
+        ;
+
+        let mut instructions = script.instructions();
+        let mut instruction = instructions.next();
+
+        // Checks quorum.
+        let quorum = if let Some(Ok(instruction)) = instruction {
+            Some(instruction)
+                .and_then(read_usize)
+                .ok_or_else(|| RedeemScriptError::NotStandard)?
+        } else {
+            return Err(RedeemScriptError::NoQuorum)
         };
 
-        let mut instructions = script.iter(true).peekable();
-        // Parses quorum.
-        let quorum = instructions
-            .next()
-            .and_then(read_usize)
-            .ok_or_else(|| RedeemScriptError::NoQuorum)?;
         let public_keys = {
             // Parses public keys.
             let mut public_keys = Vec::new();
-            while let Some(Instruction::PushBytes(slice)) = instructions.peek().cloned() {
+            instruction = instructions.next();
+            while let Some(Ok(Instruction::PushBytes(slice))) = instruction {
                 // HACK: `public_keys_len` can be pushed as `OP_PUSHNUM` or as `OP_PUSHBYTES`
                 // but its length cannot be greater than 1.
                 if slice.len() == 1 {
@@ -150,22 +158,25 @@ impl RedeemScriptContent {
                 let pub_key =
                     PublicKey::from_slice(slice).map_err(|_| RedeemScriptError::NotStandard)?;
                 public_keys.push(pub_key);
-                instructions.next();
+                instruction = instructions.next();
             }
             // Checks tail.
-            let public_keys_len = instructions
-                .next()
-                .and_then(read_usize)
-                .ok_or_else(|| RedeemScriptError::NotStandard)?;
-            ensure!(
-                public_keys.len() == public_keys_len,
-                RedeemScriptError::NotEnoughPublicKeys
-            );
-            ensure!(
-                Some(Instruction::Op(OP_CHECKMULTISIG)) == instructions.next(),
-                RedeemScriptError::NotStandard
-            );
-            public_keys
+            if let Some(Ok(instruction)) = instruction {
+                let public_keys_len = Some(instruction)
+                    .and_then(read_usize)
+                    .ok_or_else(|| RedeemScriptError::NotStandard)?;
+                ensure!(
+                    public_keys.len() == public_keys_len,
+                    RedeemScriptError::NotEnoughPublicKeys
+                );
+                ensure!(
+                    Some(Ok(Instruction::Op(OP_CHECKMULTISIG))) == instructions.next(),
+                    RedeemScriptError::NotStandard
+                );
+                public_keys
+            } else {
+                return Err(RedeemScriptError::NotStandard)
+            }
         };
         // Returns parsed script.
         Ok(RedeemScriptContent {
@@ -197,7 +208,7 @@ impl RedeemScriptBuilder {
     }
 
     /// Creates builder for the given bitcoin public keys.
-    pub fn with_public_keys<I: IntoIterator<Item = PublicKey>>(
+    pub fn with_public_keys<I: IntoIterator<Item=PublicKey>>(
         public_keys: I,
     ) -> RedeemScriptBuilder {
         let public_keys = public_keys.into_iter().collect::<Vec<_>>();
@@ -300,9 +311,9 @@ mod tests {
             "cPHmynxvqfr7sXsJcohiGzoPGBShggxL6VWUdW14skohFZ1LQoeV",
             "cTtSTL1stvg2tmK349WTmQDfHLMLqkkxwuo8ZJeQov9zEhtYtb4u",
         ]
-        .into_iter()
-        .map(|wif| keypair_from_wif(wif).0)
-        .collect::<Vec<_>>();
+            .into_iter()
+            .map(|wif| keypair_from_wif(wif).0)
+            .collect::<Vec<_>>();
 
         assert_eq!(
             RedeemScriptBuilder::with_public_keys(keys)
@@ -360,9 +371,9 @@ mod tests {
             "cNqiotwcBrkLsFMC5wwehvSQ6CcjXu74U4mEeZn6vx3ZLYH2k3QY",
             "cSAyWaxS6SwWQ5REE1LuNp1Vqi771JsTFRU1ZisUHkKRiYLg6grq",
         ]
-        .into_iter()
-        .map(|wif| keypair_from_wif(wif).0)
-        .collect::<Vec<_>>();
+            .into_iter()
+            .map(|wif| keypair_from_wif(wif).0)
+            .collect::<Vec<_>>();
 
         let script = RedeemScriptBuilder::with_quorum(3)
             .public_key(public_keys[0])

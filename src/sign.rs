@@ -21,6 +21,7 @@ use bitcoin::{
 use secp256k1::{self, Message, Secp256k1, SecretKey, Signature, Signing, Verification};
 
 use std::borrow::ToOwned;
+use bitcoin::hashes::sha256d::Hash;
 
 use crate::{Sha256dHash, TxInRef, UnspentTxOutValue};
 
@@ -142,7 +143,7 @@ pub fn signature_hash<'a, 'b, V: Into<UnspentTxOutValue<'b>>>(
     txin: TxInRef<'a>,
     script: &Script,
     value: V,
-) -> Sha256dHash {
+) -> Hash {
     let value = value.into().balance(txin);
     SighashComponents::new(txin.transaction)
         .sighash_all(txin.as_ref(), script, value)

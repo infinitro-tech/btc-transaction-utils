@@ -30,7 +30,7 @@ use crate::{
 
 /// Creates a bitcoin address for the corresponding public key and the bitcoin network.
 pub fn address(pk: &PublicKey, network: Network) -> Address {
-    Address::p2wpkh(pk, network)
+    Address::p2wpkh(pk, network).unwrap()
 }
 
 /// Creates a script pubkey for the corresponding public key.
@@ -80,7 +80,7 @@ impl InputSigner {
         &mut self,
         txin: TxInRef<'a>,
         value: V,
-    ) -> Sha256dHash {
+    ) -> bitcoin::hashes::sha256d::Hash {
         sign::signature_hash(txin, &self.witness_script(), value)
     }
 
